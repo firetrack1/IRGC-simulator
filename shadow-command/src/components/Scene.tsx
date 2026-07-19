@@ -19,7 +19,7 @@ export default function Scene() {
       onPointerMissed={() => selectRegion(null)}
     >
       <color attach="background" args={['#0d1520']} />
-      <fog attach="fog" args={['#0d1520', 46, 85]} />
+      <fog attach="fog" args={['#0d1520', 70, 320]} />
       <ambientLight intensity={0.75} />
       <directionalLight
         position={[10, 26, 8]}
@@ -50,7 +50,7 @@ export default function Scene() {
       <OrbitControls
         enablePan
         minDistance={8}
-        maxDistance={55}
+        maxDistance={260}
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
     </Canvas>

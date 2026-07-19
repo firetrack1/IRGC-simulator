@@ -15,6 +15,7 @@ import type {
 import { INITIAL_REGIONS } from '../data/regions';
 import { pickWeightedEvent } from '../logic/events';
 import { TECH_TREE, type TechId } from '../data/tech';
+import { PROXY_INTENSITY_LABELS, SUPERPOWER_INTENSITY_LABELS } from '../types';
 
 const REFORMIST_MIN_TURN = 10;
 const REFORMIST_MIN_MORALE = 70;
@@ -50,7 +51,18 @@ const INITIAL_ARSENAL: Arsenal = {
 
 const WIN_TURN_THRESHOLD = 30;
 const WIN_CONTROL_THRESHOLD = 65; // average control share across proxy regions
+const WIN_SUPERPOWER_THRESHOLD = 90; // destabilization needed for the superpower-humbled ending
 const PROXY_INTENSITY_COST = [0, 15, 30, 55, 90]; // influence cost to move to this intensity level
+// Meddling with a nuclear superpower costs far more and carries far higher
+// blowback than a regional proxy front — see setProxyIntensity below.
+const SUPERPOWER_INTENSITY_COST = [0, 40, 90, 160, 260];
+const SUPERPOWER_ESCALATION_HEADLINES: Record<number, string> = {
+  0: 'Operation Quietly Shelved; No One Ever Notices',
+  1: 'Obscure Podcast Network Receives Mysterious New Sponsor',
+  2: 'Trending Hashtag Blames Foreign Meddling — Accurately, For Once',
+  3: 'Voting Machine Vendor Issues Statement Insisting Everything Is Fine',
+  4: 'Multiple Cable News Panels Declare Unrelated National Emergencies Simultaneously',
+};
 
 function clamp(value: number, min = 0, max = 100): number {
   return Math.max(min, Math.min(max, value));
@@ -239,22 +251,44 @@ export const useGameStore = create<GameState>((set) => ({
       if (state.gameOver) return state;
       const region = state.regions.find((r) => r.id === regionId);
       if (!region || region.isHomeland) return state;
-      const currentCost = PROXY_INTENSITY_COST[region.intensity];
-      const targetCost = PROXY_INTENSITY_COST[intensity];
+
+      const costTable = region.isSuperpower ? SUPERPOWER_INTENSITY_COST : PROXY_INTENSITY_COST;
+      const currentCost = costTable[region.intensity];
+      const targetCost = costTable[intensity];
       const discount = hasTech(state.unlockedTech, 'asymmetric') ? 0.8 : 1;
       const delta = Math.round((targetCost - currentCost) * discount);
       if (delta > 0 && state.resources.influence < delta) return state;
       const controlDelta = (intensity - region.intensity) * 6;
+
+      // Meddling with a superpower carries immediate, sharp blowback risk —
+      // regional proxy escalation doesn't touch Heat/Retaliation at all.
+      const intensityIncrease = Math.max(0, intensity - region.intensity);
+      const heatBump = region.isSuperpower ? intensityIncrease * 10 : 0;
+      const riskBump = region.isSuperpower ? intensityIncrease * 12 : 0;
+
+      const headline = region.isSuperpower
+        ? SUPERPOWER_ESCALATION_HEADLINES[intensity]
+        : `Operations Escalate in ${region.name}`;
+      const detail = region.isSuperpower
+        ? `Subversion posture set to ${SUPERPOWER_INTENSITY_LABELS[intensity]}.` +
+          (heatBump ? ` Heat +${heatBump}, Retaliation Risk +${riskBump}.` : '')
+        : `Proxy posture set to ${PROXY_INTENSITY_LABELS[intensity]}.`;
+
       return {
-        resources: { ...state.resources, influence: state.resources.influence - delta },
+        resources: {
+          ...state.resources,
+          influence: state.resources.influence - delta,
+          heat: clamp(state.resources.heat + heatBump, 0, 999),
+          retaliationRisk: clamp(state.resources.retaliationRisk + riskBump, 0, 999),
+        },
         regions: state.regions.map((r) =>
           r.id === regionId
             ? { ...r, intensity, controlShare: clamp(r.controlShare + controlDelta) }
             : r
         ),
         eventLog: pushLog(state.eventLog, state.turn, {
-          headline: `Operations Escalate in ${region.name}`,
-          detail: `Proxy posture set to ${['No Presence', 'Political Support', 'Covert Funding', 'Arming Militias', 'Active Conflict'][intensity]}.`,
+          headline,
+          detail,
           tone: intensity >= 3 ? 'warning' : 'triumph',
         }),
       };
@@ -307,7 +341,9 @@ export const useGameStore = create<GameState>((set) => ({
       if (available <= 0) return state;
       const target = state.regions.find((r) => r.id === targetRegionId);
       const homeland = state.regions.find((r) => r.isHomeland);
-      if (!target || !homeland) return state;
+      // The superpower region is only ever engaged via the covert subversion
+      // ladder (setProxyIntensity) — never a kinetic strike target.
+      if (!target || !homeland || target.isSuperpower) return state;
 
       let controlGain = weapon === 'missile' ? 15 + Math.round(Math.random() * 10) : 8 + Math.round(Math.random() * 8);
       let heatGain = weapon === 'missile' ? 12 + Math.round(Math.random() * 6) : 6 + Math.round(Math.random() * 5);
@@ -518,14 +554,22 @@ export const useGameStore = create<GameState>((set) => ({
       const gameOver =
         checkGameOver(nextResources, factions, negativeTreasuryStreak) ??
         (() => {
-          const avgControl =
-            regions.filter((r) => !r.isHomeland).reduce((sum, r) => sum + r.controlShare, 0) /
-            regions.filter((r) => !r.isHomeland).length;
+          const proxyRegions = regions.filter((r) => !r.isHomeland && !r.isSuperpower);
+          const avgControl = proxyRegions.reduce((sum, r) => sum + r.controlShare, 0) / proxyRegions.length;
           if (nextTurn > WIN_TURN_THRESHOLD && avgControl >= WIN_CONTROL_THRESHOLD) {
             return { over: true, won: true, endingType: 'hegemony' as const, reason: `Regional hegemony achieved: ${Math.round(avgControl)}% average control after ${nextTurn - 1} turns.` };
           }
           if (treasury >= 2000) {
             return { over: true, won: true, endingType: 'economic' as const, reason: 'Economic dominance achieved: the treasury overflows beyond 2000.' };
+          }
+          const usa = regions.find((r) => r.isSuperpower);
+          if (usa && usa.controlShare >= WIN_SUPERPOWER_THRESHOLD) {
+            return {
+              over: true,
+              won: true,
+              endingType: 'superpowerHumbled' as const,
+              reason: `The Great Satan spends more energy investigating itself than governing: ${Math.round(usa.controlShare)}% destabilized after ${nextTurn - 1} turns. Its allies stop returning your calls out of pure secondhand embarrassment.`,
+            };
           }
           return null;
         })();
@@ -564,5 +608,6 @@ export const useGameStore = create<GameState>((set) => ({
 }));
 
 export const PROXY_INTENSITY_COSTS = PROXY_INTENSITY_COST;
+export const SUPERPOWER_INTENSITY_COSTS = SUPERPOWER_INTENSITY_COST;
 export { WIN_TURN_THRESHOLD, WIN_CONTROL_THRESHOLD, REFORMIST_MIN_TURN, REFORMIST_MIN_MORALE, REFORMIST_MAX_CORRUPTION };
 export const getRegionById = (regions: Region[], id: string | null) => regions.find((r) => r.id === id) ?? null;

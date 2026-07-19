@@ -1,6 +1,6 @@
-import { PROXY_INTENSITY_LABELS } from '../types';
+import { PROXY_INTENSITY_LABELS, SUPERPOWER_INTENSITY_LABELS } from '../types';
 import type { ProxyIntensity } from '../types';
-import { PROXY_INTENSITY_COSTS, useGameStore } from '../state/gameStore';
+import { PROXY_INTENSITY_COSTS, SUPERPOWER_INTENSITY_COSTS, useGameStore } from '../state/gameStore';
 
 const INTENSITY_LEVELS: ProxyIntensity[] = [0, 1, 2, 3, 4];
 
@@ -27,6 +27,38 @@ export default function RegionPanel() {
   }
 
   const availableWeapon = selectedWeapon === 'missile' ? arsenal.missiles : arsenal.drones;
+
+  if (region.isSuperpower) {
+    return (
+      <div className="panel region-panel">
+        <h2>{region.name}</h2>
+        <p className="panel-hint">Destabilization: {Math.round(region.controlShare)}%</p>
+        <div className="resource-bar-track">
+          <div className="resource-bar-fill" style={{ width: `${region.controlShare}%`, background: '#c94f4f' }} />
+        </div>
+        <p className="panel-hint">
+          No troops, no proxies, no missiles here — just influence ops. Escalation is expensive and every
+          step raises Heat and Retaliation Risk immediately.
+        </p>
+
+        <h3>Subversion Operations</h3>
+        <div className="intensity-ladder">
+          {INTENSITY_LEVELS.map((level) => (
+            <button
+              key={level}
+              className={`intensity-step ${region.intensity === level ? 'active' : ''}`}
+              disabled={!!gameOver}
+              onClick={() => setProxyIntensity(region.id, level)}
+            >
+              <span>{SUPERPOWER_INTENSITY_LABELS[level]}</span>
+              <span className="intensity-cost">{SUPERPOWER_INTENSITY_COSTS[level]} Inf.</span>
+            </button>
+          ))}
+        </div>
+        <p className="panel-hint">Heat: {Math.round(resources.heat)}% · Retaliation Risk: {Math.round(resources.retaliationRisk)}%</p>
+      </div>
+    );
+  }
 
   return (
     <div className="panel region-panel">

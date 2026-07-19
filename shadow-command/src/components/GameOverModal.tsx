@@ -5,6 +5,7 @@ const TITLES: Record<EndingType, string> = {
   hegemony: 'Regional Hegemony',
   economic: 'Economic Dominance',
   reformist: 'A New Dawn',
+  superpowerHumbled: 'The Great Satan, Humbled',
   collapse: 'Regime Collapse',
 };
 

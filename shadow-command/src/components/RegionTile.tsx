@@ -21,6 +21,8 @@ import {
 const RIVAL_COLOR = new THREE.Color('#8a3a3a');
 const PLAYER_COLOR = new THREE.Color('#c9a227');
 const HOMELAND_COLOR = new THREE.Color('#2f6b4f');
+const STABLE_COLOR = new THREE.Color('#2a4d6e');
+const CHAOS_COLOR = new THREE.Color('#c94f4f');
 const PLATE_THICKNESS = 0.16;
 
 // Regions with a coastline that get a naval token once proxy intensity is high.
@@ -29,8 +31,9 @@ const COASTAL_OFFSETS: Record<string, [number, number]> = {
   gulf: [1.15, 0.4],
 };
 
-function controlColor(controlShare: number, isHomeland?: boolean): THREE.Color {
+function controlColor(controlShare: number, isHomeland?: boolean, isSuperpower?: boolean): THREE.Color {
   if (isHomeland) return HOMELAND_COLOR.clone();
+  if (isSuperpower) return STABLE_COLOR.clone().lerp(CHAOS_COLOR, controlShare / 100);
   return RIVAL_COLOR.clone().lerp(PLAYER_COLOR, controlShare / 100);
 }
 
@@ -45,7 +48,10 @@ export default function RegionTile({ region, selected, onSelect }: Props) {
   const geo = PLAYABLE_GEOMETRY[region.id];
   const groupRef = useRef<THREE.Group>(null);
   const sectors = useGameStore((s) => (region.isHomeland ? s.sectors : null));
-  const color = useMemo(() => controlColor(region.controlShare, region.isHomeland), [region.controlShare, region.isHomeland]);
+  const color = useMemo(
+    () => controlColor(region.controlShare, region.isHomeland, region.isSuperpower),
+    [region.controlShare, region.isHomeland, region.isSuperpower]
+  );
 
   const plateGeometry = useMemo(() => {
     const shapes = buildShapes(geo.polygons);
@@ -149,7 +155,7 @@ export default function RegionTile({ region, selected, onSelect }: Props) {
           <div className="region-label-name">{region.name}</div>
           {!region.isHomeland && (
             <div className="region-label-meta">
-              {Math.round(region.controlShare)}% control
+              {Math.round(region.controlShare)}% {region.isSuperpower ? 'destabilized' : 'control'}
             </div>
           )}
         </div>

@@ -11,4 +11,13 @@ export const INITIAL_REGIONS: Region[] = [
   { id: 'yemen', name: 'Yemen', position: centroid('yemen'), intensity: 2, controlShare: 30, supplyLineIntact: true },
   { id: 'gulf', name: 'Gulf States', position: centroid('gulf'), intensity: 0, controlShare: 10, supplyLineIntact: true },
   { id: 'afghanistan', name: 'Afghanistan', position: centroid('afghanistan'), intensity: 1, controlShare: 20, supplyLineIntact: true },
+  {
+    id: 'usa',
+    name: 'The United States ("The Great Satan")',
+    position: centroid('usa'),
+    intensity: 0,
+    controlShare: 0,
+    supplyLineIntact: true,
+    isSuperpower: true,
+  },
 ];
