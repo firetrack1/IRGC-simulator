@@ -1,4 +1,9 @@
-import { useGameStore } from '../state/gameStore';
+import {
+  REFORMIST_MAX_CORRUPTION,
+  REFORMIST_MIN_MORALE,
+  REFORMIST_MIN_TURN,
+  useGameStore,
+} from '../state/gameStore';
 
 export default function ActionPanel() {
   const sectors = useGameStore((s) => s.sectors);
@@ -8,11 +13,17 @@ export default function ActionPanel() {
   const arsenal = useGameStore((s) => s.arsenal);
   const toggleSector = useGameStore((s) => s.toggleSector);
   const toggleSiphon = useGameStore((s) => s.toggleSiphon);
+  const investInPublicServices = useGameStore((s) => s.investInPublicServices);
   const appeaseFaction = useGameStore((s) => s.appeaseFaction);
   const buildArsenal = useGameStore((s) => s.buildArsenal);
   const buildAirDefense = useGameStore((s) => s.buildAirDefense);
   const negotiateDeescalation = useGameStore((s) => s.negotiateDeescalation);
+  const dismantleNetwork = useGameStore((s) => s.dismantleNetwork);
+  const turn = useGameStore((s) => s.turn);
   const gameOver = useGameStore((s) => s.gameOver);
+
+  const reformistEligible =
+    turn >= REFORMIST_MIN_TURN && resources.morale >= REFORMIST_MIN_MORALE && resources.corruption <= REFORMIST_MAX_CORRUPTION;
 
   return (
     <div className="panel action-panel">
@@ -87,6 +98,18 @@ export default function ActionPanel() {
       <p className="panel-hint">Retaliation Risk: {Math.round(resources.retaliationRisk)}%</p>
       <button className="mini-btn wide" disabled={!!gameOver || resources.influence < 25} onClick={negotiateDeescalation}>
         Back-Channel Negotiation (25 Influence)
+      </button>
+
+      <h2>Reformist Path</h2>
+      <button className="mini-btn wide" disabled={!!gameOver || resources.treasury < 50} onClick={investInPublicServices}>
+        Invest in Public Services (50 Treasury): +8 Morale / −3 Corruption
+      </button>
+      <p className="panel-hint">
+        Turn {turn}/{REFORMIST_MIN_TURN} · Morale {Math.round(resources.morale)}/{REFORMIST_MIN_MORALE} · Corruption{' '}
+        {Math.round(resources.corruption)}/{REFORMIST_MAX_CORRUPTION} (lower is better)
+      </p>
+      <button className="strike-btn reformist-btn" disabled={!!gameOver || !reformistEligible} onClick={dismantleNetwork}>
+        Dismantle the Network
       </button>
     </div>
   );

@@ -3,6 +3,7 @@ import { OrbitControls } from '@react-three/drei';
 import { useGameStore } from '../state/gameStore';
 import RegionTile from './RegionTile';
 import StrikeEffect from './StrikeEffect';
+import WorldMap from './WorldMap';
 
 export default function Scene() {
   const regions = useGameStore((s) => s.regions);
@@ -12,30 +13,26 @@ export default function Scene() {
   const selectRegion = useGameStore((s) => s.selectRegion);
 
   return (
-    <Canvas shadows camera={{ position: [0, 15, 13], fov: 40 }}>
-      <color attach="background" args={['#141821']} />
-      <fog attach="fog" args={['#141821', 20, 42]} />
-      <ambientLight intensity={0.6} />
+    <Canvas
+      shadows
+      camera={{ position: [0, 30, 24], fov: 38 }}
+      onPointerMissed={() => selectRegion(null)}
+    >
+      <color attach="background" args={['#0d1520']} />
+      <fog attach="fog" args={['#0d1520', 46, 85]} />
+      <ambientLight intensity={0.75} />
       <directionalLight
-        position={[6, 14, 5]}
+        position={[10, 26, 8]}
         intensity={1.2}
         castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-15}
-        shadow-camera-right={15}
-        shadow-camera-top={15}
-        shadow-camera-bottom={-15}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-24}
+        shadow-camera-right={24}
+        shadow-camera-top={24}
+        shadow-camera-bottom={-24}
       />
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.06, 0]}
-        receiveShadow
-        onPointerMissed={() => selectRegion(null)}
-      >
-        <planeGeometry args={[44, 44]} />
-        <meshStandardMaterial color="#1c2230" />
-      </mesh>
-      <gridHelper args={[44, 44, '#2a3244', '#232a3a']} position={[0, -0.055, 0]} />
+
+      <WorldMap />
 
       {regions.map((r) => (
         <RegionTile
@@ -52,8 +49,8 @@ export default function Scene() {
 
       <OrbitControls
         enablePan
-        minDistance={6}
-        maxDistance={30}
+        minDistance={8}
+        maxDistance={55}
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
     </Canvas>

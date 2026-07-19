@@ -1,4 +1,12 @@
 import { useGameStore } from '../state/gameStore';
+import type { EndingType } from '../types';
+
+const TITLES: Record<EndingType, string> = {
+  hegemony: 'Regional Hegemony',
+  economic: 'Economic Dominance',
+  reformist: 'A New Dawn',
+  collapse: 'Regime Collapse',
+};
 
 export default function GameOverModal() {
   const gameOver = useGameStore((s) => s.gameOver);
@@ -9,8 +17,8 @@ export default function GameOverModal() {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal">
-        <h1>{gameOver.won ? 'Victory' : 'Regime Collapse'}</h1>
+      <div className={`modal ${gameOver.won ? 'modal-win' : 'modal-loss'}`}>
+        <h1>{TITLES[gameOver.endingType]}</h1>
         <p className="modal-turn">Survived {turn - 1} turns</p>
         <p>{gameOver.reason}</p>
         <button className="strike-btn" onClick={resetGame}>

@@ -59,10 +59,13 @@ export interface EventLogEntry {
   tone: 'triumph' | 'warning' | 'disaster';
 }
 
+export type EndingType = 'hegemony' | 'economic' | 'reformist' | 'collapse';
+
 export interface GameOverState {
   over: boolean;
   won: boolean;
   reason: string;
+  endingType: EndingType;
 }
 
 export interface StrikeVisualEvent {

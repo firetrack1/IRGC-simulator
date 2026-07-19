@@ -14,6 +14,11 @@ import type {
 } from '../types';
 import { INITIAL_REGIONS } from '../data/regions';
 import { pickWeightedEvent } from '../logic/events';
+import { TECH_TREE, type TechId } from '../data/tech';
+
+const REFORMIST_MIN_TURN = 10;
+const REFORMIST_MIN_MORALE = 70;
+const REFORMIST_MAX_CORRUPTION = 20;
 
 const INITIAL_SECTORS: Sector[] = [
   { id: 'oil', name: 'Oil Ministry', assigned: false, incomePerTurn: 45, corruptionPerTurn: 6, moralePerTurn: -1 },
@@ -65,10 +70,16 @@ interface GameState {
   selectedWeapon: 'missile' | 'drone';
   strikeVisuals: StrikeVisualEvent[];
   negativeTreasuryStreak: number;
+  unlockedTech: TechId[];
+  techPanelOpen: boolean;
 
   selectRegion: (id: string | null) => void;
+  toggleTechPanel: () => void;
+  unlockTech: (id: TechId) => void;
+  dismantleNetwork: () => void;
   toggleSector: (id: SectorId) => void;
   toggleSiphon: () => void;
+  investInPublicServices: () => void;
   appeaseFaction: (id: FactionId) => void;
   setProxyIntensity: (regionId: string, intensity: ProxyIntensity) => void;
   buildArsenal: (type: 'missile' | 'drone', qty: number) => void;
@@ -88,19 +99,23 @@ function pushLog(log: EventLogEntry[], turn: number, entry: Omit<EventLogEntry, 
 
 function checkGameOver(resources: Resources, factions: Faction[], negativeStreak: number): GameOverState | null {
   if (resources.morale <= 0) {
-    return { over: true, won: false, reason: 'Mass uprising: Public Morale collapsed to zero. The regime falls.' };
+    return { over: true, won: false, endingType: 'collapse', reason: 'Mass uprising: Public Morale collapsed to zero. The regime falls.' };
   }
   const collapsedFaction = factions.find((f) => f.loyalty <= 0);
   if (collapsedFaction) {
-    return { over: true, won: false, reason: `${collapsedFaction.name} withdraws support entirely. Tanks roll on the palace.` };
+    return { over: true, won: false, endingType: 'collapse', reason: `${collapsedFaction.name} withdraws support entirely. Tanks roll on the palace.` };
   }
   if (resources.heat >= 100) {
-    return { over: true, won: false, reason: 'International Heat maxed out: a coalition intervention removes the regime.' };
+    return { over: true, won: false, endingType: 'collapse', reason: 'International Heat maxed out: a coalition intervention removes the regime.' };
   }
   if (negativeStreak >= 3) {
-    return { over: true, won: false, reason: 'Total economic strangulation: the treasury has been insolvent for too long.' };
+    return { over: true, won: false, endingType: 'collapse', reason: 'Total economic strangulation: the treasury has been insolvent for too long.' };
   }
   return null;
+}
+
+function hasTech(unlockedTech: TechId[], id: TechId): boolean {
+  return unlockedTech.includes(id);
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -119,8 +134,55 @@ export const useGameStore = create<GameState>((set) => ({
   selectedWeapon: 'missile',
   strikeVisuals: [],
   negativeTreasuryStreak: 0,
+  unlockedTech: [],
+  techPanelOpen: false,
 
   selectRegion: (id) => set({ selectedRegionId: id }),
+  toggleTechPanel: () => set((state) => ({ techPanelOpen: !state.techPanelOpen })),
+
+  unlockTech: (id) =>
+    set((state) => {
+      if (state.gameOver) return state;
+      if (state.unlockedTech.includes(id)) return state;
+      const node = TECH_TREE.find((t) => t.id === id);
+      if (!node) return state;
+      if (!node.prerequisites.every((p) => state.unlockedTech.includes(p))) return state;
+      const treasuryCost = node.cost.treasury ?? 0;
+      const influenceCost = node.cost.influence ?? 0;
+      if (state.resources.treasury < treasuryCost || state.resources.influence < influenceCost) return state;
+      return {
+        resources: {
+          ...state.resources,
+          treasury: state.resources.treasury - treasuryCost,
+          influence: state.resources.influence - influenceCost,
+        },
+        unlockedTech: [...state.unlockedTech, id],
+        eventLog: pushLog(state.eventLog, state.turn, {
+          headline: `Research Complete: ${node.name}`,
+          detail: node.description,
+          tone: 'triumph',
+        }),
+      };
+    }),
+
+  dismantleNetwork: () =>
+    set((state) => {
+      if (state.gameOver) return state;
+      const eligible =
+        state.turn >= REFORMIST_MIN_TURN &&
+        state.resources.morale >= REFORMIST_MIN_MORALE &&
+        state.resources.corruption <= REFORMIST_MAX_CORRUPTION;
+      if (!eligible) return state;
+      return {
+        gameOver: {
+          over: true,
+          won: true,
+          endingType: 'reformist',
+          reason:
+            'You dissolve the patronage networks, stand down the proxy fronts, and hand power to a civilian transitional council. State media has no idea how to spin this one.',
+        },
+      };
+    }),
 
   toggleSector: (id) =>
     set((state) => {
@@ -134,6 +196,26 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => {
       if (state.gameOver) return state;
       return { siphonActive: !state.siphonActive };
+    }),
+
+  investInPublicServices: () =>
+    set((state) => {
+      if (state.gameOver) return state;
+      const cost = 50;
+      if (state.resources.treasury < cost) return state;
+      return {
+        resources: {
+          ...state.resources,
+          treasury: state.resources.treasury - cost,
+          morale: clamp(state.resources.morale + 8),
+          corruption: clamp(state.resources.corruption - 3),
+        },
+        eventLog: pushLog(state.eventLog, state.turn, {
+          headline: 'State Unveils New Public Clinic; Ribbon-Cutting Draws Modest Crowd',
+          detail: `Spent ${cost} Treasury on public services. Morale +8, Corruption -3.`,
+          tone: 'triumph',
+        }),
+      };
     }),
 
   appeaseFaction: (id) =>
@@ -159,7 +241,8 @@ export const useGameStore = create<GameState>((set) => ({
       if (!region || region.isHomeland) return state;
       const currentCost = PROXY_INTENSITY_COST[region.intensity];
       const targetCost = PROXY_INTENSITY_COST[intensity];
-      const delta = targetCost - currentCost;
+      const discount = hasTech(state.unlockedTech, 'asymmetric') ? 0.8 : 1;
+      const delta = Math.round((targetCost - currentCost) * discount);
       if (delta > 0 && state.resources.influence < delta) return state;
       const controlDelta = (intensity - region.intensity) * 6;
       return {
@@ -223,15 +306,22 @@ export const useGameStore = create<GameState>((set) => ({
       const available = weapon === 'missile' ? state.arsenal.missiles : state.arsenal.drones;
       if (available <= 0) return state;
       const target = state.regions.find((r) => r.id === targetRegionId);
-      if (!target) return state;
+      const homeland = state.regions.find((r) => r.isHomeland);
+      if (!target || !homeland) return state;
 
-      const controlGain = weapon === 'missile' ? 15 + Math.round(Math.random() * 10) : 8 + Math.round(Math.random() * 8);
-      const heatGain = weapon === 'missile' ? 12 + Math.round(Math.random() * 6) : 6 + Math.round(Math.random() * 5);
+      let controlGain = weapon === 'missile' ? 15 + Math.round(Math.random() * 10) : 8 + Math.round(Math.random() * 8);
+      let heatGain = weapon === 'missile' ? 12 + Math.round(Math.random() * 6) : 6 + Math.round(Math.random() * 5);
       const riskGain = weapon === 'missile' ? 18 + Math.round(Math.random() * 10) : 9 + Math.round(Math.random() * 6);
+
+      if (hasTech(state.unlockedTech, 'cyber')) heatGain = Math.round(heatGain * 0.8);
+      if (hasTech(state.unlockedTech, 'advancedGuidance')) {
+        controlGain = Math.round(controlGain * 1.5);
+        heatGain = Math.round(heatGain * 0.8);
+      }
 
       const visual: StrikeVisualEvent = {
         id: `${Date.now()}-${Math.random()}`,
-        from: [0, 0],
+        from: homeland.position,
         to: target.position,
         weapon,
       };
@@ -320,13 +410,15 @@ export const useGameStore = create<GameState>((set) => ({
       const factions = state.factions.map((f) => ({ ...f, loyalty: clamp(f.loyalty - 2) }));
 
       // Corruption-driven unrest pressure.
-      const unrestPressure = Math.max(0, corruption - 50) * 0.15 + Math.max(0, 50 - morale) * 0.05;
+      const disinformationFactor = hasTech(state.unlockedTech, 'disinformation') ? 0.7 : 1;
+      const unrestPressure = (Math.max(0, corruption - 50) * 0.15 + Math.max(0, 50 - morale) * 0.05) * disinformationFactor;
       morale = clamp(morale - unrestPressure);
 
       // Retaliation risk resolves into an actual retaliatory strike if too high.
+      const airDefenseGridBonus = hasTech(state.unlockedTech, 'airDefenseGrid') ? 2 : 0;
       let retaliationLog: Omit<EventLogEntry, 'turn'> | null = null;
       if (retaliationRisk >= 70) {
-        const mitigation = state.arsenal.airDefense * 8;
+        const mitigation = (state.arsenal.airDefense + airDefenseGridBonus) * 8;
         const impact = Math.max(0, retaliationRisk - mitigation);
         treasury -= impact * 0.8;
         morale = clamp(morale - impact * 0.15);
@@ -430,10 +522,10 @@ export const useGameStore = create<GameState>((set) => ({
             regions.filter((r) => !r.isHomeland).reduce((sum, r) => sum + r.controlShare, 0) /
             regions.filter((r) => !r.isHomeland).length;
           if (nextTurn > WIN_TURN_THRESHOLD && avgControl >= WIN_CONTROL_THRESHOLD) {
-            return { over: true, won: true, reason: `Regional hegemony achieved: ${Math.round(avgControl)}% average control after ${nextTurn - 1} turns.` };
+            return { over: true, won: true, endingType: 'hegemony' as const, reason: `Regional hegemony achieved: ${Math.round(avgControl)}% average control after ${nextTurn - 1} turns.` };
           }
           if (treasury >= 2000) {
-            return { over: true, won: true, reason: 'Economic dominance achieved: the treasury overflows beyond 2000.' };
+            return { over: true, won: true, endingType: 'economic' as const, reason: 'Economic dominance achieved: the treasury overflows beyond 2000.' };
           }
           return null;
         })();
@@ -466,9 +558,11 @@ export const useGameStore = create<GameState>((set) => ({
       selectedWeapon: 'missile',
       strikeVisuals: [],
       negativeTreasuryStreak: 0,
+      unlockedTech: [],
+      techPanelOpen: false,
     }),
 }));
 
 export const PROXY_INTENSITY_COSTS = PROXY_INTENSITY_COST;
-export { WIN_TURN_THRESHOLD, WIN_CONTROL_THRESHOLD };
+export { WIN_TURN_THRESHOLD, WIN_CONTROL_THRESHOLD, REFORMIST_MIN_TURN, REFORMIST_MIN_MORALE, REFORMIST_MAX_CORRUPTION };
 export const getRegionById = (regions: Region[], id: string | null) => regions.find((r) => r.id === id) ?? null;

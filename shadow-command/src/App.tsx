@@ -5,6 +5,7 @@ import ActionPanel from './components/ActionPanel';
 import RegionPanel from './components/RegionPanel';
 import EventTicker from './components/EventTicker';
 import GameOverModal from './components/GameOverModal';
+import TechTreeModal from './components/TechTreeModal';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <RegionPanel />
       </div>
       <EventTicker />
+      <TechTreeModal />
       <GameOverModal />
     </div>
   );

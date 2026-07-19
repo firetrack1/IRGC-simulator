@@ -1,4 +1,5 @@
 import { useGameStore } from '../state/gameStore';
+import { TECH_TREE } from '../data/tech';
 
 function ResourceBar({
   label,
@@ -37,6 +38,8 @@ export default function HUD() {
   const turn = useGameStore((s) => s.turn);
   const endTurn = useGameStore((s) => s.endTurn);
   const gameOver = useGameStore((s) => s.gameOver);
+  const toggleTechPanel = useGameStore((s) => s.toggleTechPanel);
+  const unlockedTech = useGameStore((s) => s.unlockedTech);
 
   const militaryAssets = arsenal.missiles + arsenal.drones;
 
@@ -54,6 +57,9 @@ export default function HUD() {
         <ResourceBar label="Public Morale" value={resources.morale} max={100} color="#3ba0a0" suffix="%" />
         <ResourceBar label="International Heat" value={resources.heat} max={100} color="#c94f4f" suffix="%" />
       </div>
+      <button className="tech-tree-btn" onClick={toggleTechPanel}>
+        Tech Tree ({unlockedTech.length}/{TECH_TREE.length})
+      </button>
       <button className="end-turn-btn" onClick={endTurn} disabled={!!gameOver}>
         End Turn ➜
       </button>

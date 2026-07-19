@@ -100,6 +100,22 @@
   cursor: not-allowed;
 }
 
+.tech-tree-btn {
+  flex-shrink: 0;
+  background: #262b36;
+  color: #e8e8ec;
+  border: 1px solid #4a5666;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.tech-tree-btn:hover {
+  background: #323949;
+}
+
 /* ---------- Body layout ---------- */
 
 .app-body {
@@ -393,6 +409,108 @@
 .modal h1 {
   color: #c9a227;
   margin-bottom: 4px;
+}
+
+.modal-loss h1 {
+  color: #d05a5a;
+}
+
+.modal-win h1 {
+  color: #4f8a5b;
+}
+
+/* ---------- Tech tree modal ---------- */
+
+.tech-modal {
+  max-width: 780px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.tech-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tech-modal-header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.tech-card {
+  background: #1e232c;
+  border: 1px solid #2a303c;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tech-card.unlocked {
+  border-color: #4f8a5b;
+  background: #2f6b4f22;
+}
+
+.tech-card-tier {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8a90a0;
+}
+
+.tech-card h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #e8e8ec;
+}
+
+.tech-card p {
+  margin: 0;
+  font-size: 12px;
+  color: #b0b6c4;
+}
+
+.tech-prereqs {
+  font-style: italic;
+  color: #8a90a0 !important;
+}
+
+.tech-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.tech-cost {
+  font-size: 11px;
+  color: #c9a227;
+}
+
+.tech-unlocked-badge {
+  font-size: 11px;
+  color: #4f8a5b;
+  font-weight: 700;
+}
+
+.reformist-btn {
+  background: #4f8a5b;
+}
+
+.reformist-btn:hover:not(:disabled) {
+  background: #5ca368;
 }
 
 .modal-turn {
