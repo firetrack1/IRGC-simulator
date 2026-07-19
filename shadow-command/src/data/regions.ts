@@ -1,6 +1,6 @@
 import type { Region } from '../types';
 import { PLAYABLE_GEOMETRY } from './worldGeo';
-
+//test
 const centroid = (id: string): [number, number] => PLAYABLE_GEOMETRY[id].centroid;
 
 export const INITIAL_REGIONS: Region[] = [
