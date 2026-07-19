@@ -12,7 +12,7 @@ function ContextCountry({ polygons }: { polygons: [number, number][][][] }) {
   }, [polygons]);
 
   return (
-    <mesh geometry={geometry} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <meshStandardMaterial color="#4a5142" roughness={1} />
     </mesh>
   );

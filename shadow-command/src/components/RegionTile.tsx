@@ -91,7 +91,7 @@ export default function RegionTile({ region, selected, onSelect }: Props) {
     <group position={[x, 0, z]}>
       <mesh
         geometry={plateGeometry}
-        rotation={[Math.PI / 2, 0, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
         castShadow
         receiveShadow
         onClick={(e) => {
