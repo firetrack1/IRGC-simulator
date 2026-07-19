@@ -29,23 +29,78 @@ const PLAYABLE = {
 // no gameplay value.
 const EXCLUDED_CONTEXT_NAMES = new Set(['Antarctica', 'Fr. S. Antarctic Lands']);
 
-// Projection reference centered on Iran; equirectangular w/ longitude
-// compressed by cos(latRef) so shapes aren't east-west stretched.
+// Projection reference centered on Iran. This is a sinusoidal projection:
+// longitude is compressed by cos(each point's OWN latitude), not a single
+// fixed reference latitude — a fixed cos(latRef) factor made landmasses far
+// from Iran's latitude (Greenland, northern Canada/Russia) render far too
+// wide (Greenland was ~2x too wide, sprawling across Europe and most of the
+// Atlantic), since real meridians converge much faster near the poles than
+// a flat cos(32°) factor accounts for.
 const LON_REF = 53.5;
 const LAT_REF = 32;
 const SCALE = 0.5;
 const DEG2RAD = Math.PI / 180;
 
-// Normalizes a longitude delta to (-180, 180] so every point projects via
-// the *shortest* path from LON_REF, rather than potentially wrapping the
-// long way around the globe.
+// Normalizes a longitude delta to (-180, 180] — used only to anchor the
+// *first* point of each ring to its shortest path from LON_REF.
 function wrapDelta(delta) {
   return ((delta + 180) % 360 + 360) % 360 - 180;
 }
 
+// Countries whose extent straddles the seam opposite Iran (~Alaska/Yukon)
+// were getting torn apart mid-ring by a naive per-point wrap (Canada's
+// bounding box was 3x too wide, its Yukon corner snapped to the opposite
+// edge of the map), and small islands that happen to sit almost exactly
+// antipodal to Iran (e.g. Haida Gwaii, off British Columbia) flew off to
+// render on the wrong side of the world by themselves. The fix: keep each
+// ring internally contiguous (standard angle-unwrapping relative to the
+// previous point), and when a *new* ring starts (a separate island, since
+// polygons aren't contiguous across rings), cluster it near the country's
+// established anchor ONLY if it's actually geographically close (within
+// GEOGRAPHIC_CLUSTER_THRESHOLD_DEG of the anchor's true shortest-path
+// distance) — e.g. Haida Gwaii or Sakhalin, a short hop from their
+// mainland. A ring that's genuinely far away (French Guiana or French
+// Polynesia relative to mainland France, Hawaii relative to the continental
+// US) is left at its own independently-anchored position instead of being
+// dragged toward the mainland, which previously made countries with
+// scattered overseas territories (e.g. France) render an enormous, bogus
+// bounding box spanning much of the globe.
+const GEOGRAPHIC_CLUSTER_THRESHOLD_DEG = 55;
+
+function unwrapCountry(rawPolygons) {
+  let anchorLon = null;
+  return rawPolygons.map((rings) =>
+    rings.map((ring) => {
+      let prevLon = null;
+      return ring.map(([lon, lat]) => {
+        let adjusted = lon;
+        if (anchorLon === null) {
+          // Very first point of the whole country.
+          adjusted = LON_REF + wrapDelta(lon - LON_REF);
+          anchorLon = adjusted;
+        } else if (prevLon === null) {
+          // First point of a new ring: decide whether to cluster it near
+          // the country's anchor or let it stand on its own.
+          const distanceFromAnchor = Math.abs(wrapDelta(lon - anchorLon));
+          if (distanceFromAnchor < GEOGRAPHIC_CLUSTER_THRESHOLD_DEG) {
+            while (adjusted - anchorLon > 180) adjusted -= 360;
+            while (adjusted - anchorLon < -180) adjusted += 360;
+          } else {
+            adjusted = LON_REF + wrapDelta(lon - LON_REF);
+          }
+        } else {
+          while (adjusted - prevLon > 180) adjusted -= 360;
+          while (adjusted - prevLon < -180) adjusted += 360;
+        }
+        prevLon = adjusted;
+        return [adjusted, lat];
+      });
+    })
+  );
+}
+
 function project([lon, lat]) {
-  const delta = wrapDelta(lon - LON_REF);
-  const x = delta * Math.cos(LAT_REF * DEG2RAD) * SCALE;
+  const x = (lon - LON_REF) * Math.cos(lat * DEG2RAD) * SCALE;
   const z = (lat - LAT_REF) * SCALE * -1; // north = -z
   return [x, z];
 }
@@ -55,8 +110,9 @@ function round(n) {
 }
 
 function polygonRings(geometry) {
-  const polys = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
-  return polys.map((rings) => rings.map((ring) => ring.map(project)));
+  const rawPolys = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  const unwrapped = unwrapCountry(rawPolys);
+  return unwrapped.map((rings) => rings.map((ring) => ring.map(project)));
 }
 
 function ringArea(ring) {
